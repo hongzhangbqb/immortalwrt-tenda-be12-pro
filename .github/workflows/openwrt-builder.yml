@@ -39,6 +39,16 @@ jobs:
       - name: Pin sources and resolve device configuration
         working-directory: /workdir
         run: bash "$GITHUB_WORKSPACE/build/prepare.sh" "$GITHUB_WORKSPACE"
+      - name: Restore the October build revision after verifying source identity
+        working-directory: /workdir/openwrt
+        run: |
+          source "$GITHUB_WORKSPACE/build/locks.env"
+          test "$(git rev-parse HEAD)" = "$SOURCE_REV"
+          original=$(cat "$GITHUB_WORKSPACE/baseline/orig-build.version")
+          test "$original" = "r1-${SOURCE_REV:0:9}"
+          echo "Revision from detached checkout: $(./scripts/getver.sh); October release: $original"
+          printf '%s\n' "$original" > version
+          test "$(./scripts/getver.sh)" = "$original"
       - name: Compile both images
         working-directory: /workdir/openwrt
         run: |
@@ -48,7 +58,10 @@ jobs:
           make -j"$(nproc)" || make -j1 V=s
       - name: Check image headers, package set, drivers and core
         working-directory: /workdir/openwrt
-        run: bash "$GITHUB_WORKSPACE/build/inspect.sh" "$GITHUB_WORKSPACE" /workdir/result
+        run: |
+          staging_dir/host/bin/fwtool -i /tmp/be12-meta.json bin/targets/mediatek/filogic/*tenda_be12-pro-squashfs-sysupgrade.bin
+          cat /tmp/be12-meta.json
+          bash "$GITHUB_WORKSPACE/build/inspect.sh" "$GITHUB_WORKSPACE" /workdir/result
       - name: Deliver verified images and build records
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
